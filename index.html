@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>VPS Manager</title>
+<style>
+  /* Modern and clean styling */
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1rem;
+  }
+  h1 {
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: #00bfa5;
+    text-align: center;
+  }
+  .container {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 0 15px #00bfa5aa;
+  }
+  label {
+    display: block;
+    margin-top: 1rem;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #a0a0a0;
+  }
+  select, input[type="text"], input[type="password"] {
+    width: 100%;
+    margin-top: 0.3rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    border: none;
+    outline: none;
+    background: #2b2b2b;
+    color: #eee;
+    transition: background 0.3s ease;
+  }
+  select:focus, input[type="text"]:focus, input[type="password"]:focus {
+    background: #383838;
+  }
+  button {
+    margin-top: 1.5rem;
+    width: 100%;
+    padding: 0.65rem;
+    font-size: 1.1rem;
+    background: #00bfa5;
+    border: none;
+    border-radius: 8px;
+    color: #121212;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+  button:hover, button:focus {
+    background: #008e7b;
+  }
+  .output {
+    margin-top: 1.5rem;
+    font-family: monospace;
+    white-space: pre-wrap;
+    background: #222;
+    padding: 1rem;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    user-select: text;
+  }
+  @media (max-width: 400px) {
+    .container {
+      max-width: 100vw;
+      border-radius: 0;
+      padding: 1rem 1.2rem;
+    }
+  }
+</style>
+</head>
+<body>
+<h1>VPS Manager</h1>
+<div class="container" role="main">
+  <form id="vpsForm" autocomplete="off">
+    <label for="ramSelect">Pilih RAM VPS (GB):</label>
+    <select id="ramSelect" name="ram" required>
+      <option value="" disabled selected>Pilih RAM</option>
+      <option value="1">1 GB</option>
+      <option value="2">2 GB</option>
+      <option value="4">4 GB</option>
+      <option value="8">8 GB</option>
+      <option value="16">16 GB</option>
+    </select>
+
+    <label for="cpuSelect">Pilih CPU VPS (Core):</label>
+    <select id="cpuSelect" name="cpu" required>
+      <option value="" disabled selected>Pilih CPU</option>
+      <option value="1">1 Core</option>
+      <option value="2">2 Core</option>
+      <option value="3">3 Core</option>
+      <option value="4">4 Core</option>
+      <option value="5">5 Core</option>
+      <option value="6">6 Core</option>
+    </select>
+
+    <label for="installable">Enable SSH Login & Installation?</label>
+    <select id="installable" name="installable" required>
+      <option value="" disabled selected>Pilih opsi</option>
+      <option value="true">Bisa login dan install</option>
+      <option value="false">Tidak bisa login dan install</option>
+    </select>
+
+    <label for="ipAddress">IP Address untuk SSH login:</label>
+    <input
+      type="text"
+      id="ipAddress"
+      name="ipAddress"
+      placeholder="Contoh: 192.168.0.1 atau kosong jika tidak ada"
+      pattern="^(?!\s*$)((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(\.(?!$)|$)){4}$"
+      title="Harus IP Valid IPv4 atau kosong"
+    />
+
+    <label for="password">Password untuk SSH login:</label>
+    <input
+      type="password"
+      id="password"
+      name="password"
+      placeholder="Isi jika bisa login"
+      minlength="6"
+    />
+
+    <button type="submit">Generate VPS Info</button>
+  </form>
+
+  <pre class="output" id="output" aria-live="polite" aria-atomic="true"></pre>
+</div>
+
+<script>
+  // Helper to generate a random valid IP if none provided
+  function generateRandomIP() {
+    // Generate IP in 10.x.x.x private range
+    const parts = [10];
+    for (let i = 0; i < 3; i++) {
+      parts.push(Math.floor(Math.random() * 256));
+    }
+    return parts.join('.');
+  }
+
+  const form = document.getElementById("vpsForm");
+  const output = document.getElementById("output");
+  const ipAddressInput = document.getElementById("ipAddress");
+  const passwordInput = document.getElementById("password");
+  const installableSelect = document.getElementById("installable");
+
+  // Disable IP and Password fields if "Tidak bisa login dan install"
+  function toggleLoginFields() {
+    const canLogin = installableSelect.value === "true";
+    ipAddressInput.disabled = !canLogin;
+    passwordInput.disabled = !canLogin;
+    if (!canLogin) {
+      ipAddressInput.value = "";
+      passwordInput.value = "";
+    }
+  }
+  installableSelect.addEventListener('change', toggleLoginFields);
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    // Collect values
+    const ram = form.ram.value;
+    const cpu = form.cpu.value;
+    const installable = form.installable.value === "true";
+    let ip = form.ipAddress.value.trim();
+    let password = form.password.value;
+
+    if (installable) {
+      // Validate IP - if empty, generate random IP
+      if (!ip) {
+        ip = generateRandomIP();
+      }
+      if (password.length < 6) {
+        alert("Password minimal 6 karakter jika VPS bisa login SSH.");
+        passwordInput.focus();
+        return;
+      }
+    } else {
+      ip = "N/A";
+      password = "N/A";
+    }
+
+    // Compose VPS info output
+    let sshInfo = installable
+      ? `SSH Login Info:\n  IP Address: ${ip}\n  Username: root\n  Password: ${password}`
+      : "SSH Login: Disabled";
+
+    let installInfo = installable
+      ? "Installation: Allowed"
+      : "Installation: Not Allowed";
+
+    const summary = 
+`VPS Configuration:
+  - RAM: ${ram} GB
+  - CPU: ${cpu} Core
+${sshInfo}
+${installInfo}`;
+
+    output.textContent = summary;
+  });
+</script>
+</body>
+</html>
+
+```
